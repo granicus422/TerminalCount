@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
 using TerminalCount.Services;
 using System.Threading;
+using Serilog;
 
 namespace TerminalCount
 {
@@ -87,12 +88,20 @@ namespace TerminalCount
         // this method handles the ServiceCollection creation/configuration, and builds out the service provider we can call on later
         private ServiceProvider ConfigureServices()
         {
+            var serilogLogger = new LoggerConfiguration()
+            .ReadFrom.Configuration(configuration: _config)
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+            .CreateLogger();
+            Serilog.Debugging.SelfLog.Enable(Console.Error);
+            serilogLogger.Information("test console log");
+            Log.Logger = serilogLogger;
             // this returns a ServiceProvider that is used later to call for those services
             // we can add types we have access to here, hence adding the new using statement:
             // using csharpi.Services;
             // the config we build is also added, which comes in handy for setting the command prefix!
             return new ServiceCollection()
                 .AddSingleton(_config)
+                .AddLogging(configure => configure.AddSerilog(logger: serilogLogger))
                 .AddSingleton<DiscordSocketClient>()
                 .AddSingleton<CommandService>()
                 .AddSingleton<CommandHandler>()

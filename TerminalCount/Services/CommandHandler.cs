@@ -10,6 +10,8 @@ using TerminalCount.Modules;
 using MySql.Data.MySqlClient;
 using System.Data;
 using System.Linq;
+using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace TerminalCount.Services
 {
@@ -20,6 +22,7 @@ namespace TerminalCount.Services
         private readonly CommandService _commands;
         private readonly DiscordSocketClient _client;
         private readonly IServiceProvider _services;
+        //private readonly ILogger _logger;
         private readonly string _connStr;
 
         public CommandHandler(IServiceProvider services)
@@ -29,6 +32,7 @@ namespace TerminalCount.Services
             _config = services.GetRequiredService<IConfiguration>();
             _commands = services.GetRequiredService<CommandService>();
             _client = services.GetRequiredService<DiscordSocketClient>();
+            //_logger = services.GetRequiredService<ILogger>();
             _services = services;
 
             // take action when we execute a command
@@ -45,13 +49,20 @@ namespace TerminalCount.Services
 
         public async Task InitializeAsync()
         {
+            try { 
             // register modules that are public and inherit ModuleBase<T>.
             await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
+            }
         }
 
         // this class is where the magic starts, and takes actions upon receiving messages
         public async Task MessageReceivedAsync(SocketMessage rawMessage)
         {
+            try { 
             // ensures we don't process system/other bot messages
             if (!(rawMessage is SocketUserMessage message))
             {
@@ -86,10 +97,17 @@ namespace TerminalCount.Services
                 //parse.
                 //await cmd.ExecuteAsync(context, new ParseResult(), _services);
             }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
+                return;
+            }
         }
 
         public async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> msg, ISocketMessageChannel channel, SocketReaction react)
         {
+            try { 
             var em = new Emoji("\u2705");
             //In secrets.json
 #if DEBUG
@@ -127,11 +145,17 @@ namespace TerminalCount.Services
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
+            }
             return;
         }
 
         public async Task ReactionRemovedAsync(Cacheable<IUserMessage, ulong> msg, ISocketMessageChannel channel, SocketReaction react)
         {
+            try { 
             var em = new Emoji("\u2705");
             //In secrets.json
 #if DEBUG
@@ -169,6 +193,11 @@ namespace TerminalCount.Services
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
+            }
             return;
         }
 
@@ -177,7 +206,9 @@ namespace TerminalCount.Services
             // if a command isn't found, log that info to console and exit this method
             if (!command.IsSpecified)
             {
-                System.Console.WriteLine($"Command failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!");
+                var msg = $"Command [{context.Message.Content}] failed to execute for [{context.User.Username}] <-> [{result.ErrorReason}]!";
+                System.Console.WriteLine(msg);
+                Log.Information(msg);
                 return;
             }
 
@@ -189,9 +220,8 @@ namespace TerminalCount.Services
                 return;
             }
 
-
             // failure scenario, let's let the user know
-            await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}... something went wrong...  use **!tc help** to see commands and options");
+            await context.Channel.SendMessageAsync($"Sorry, {context.User.Username}, something went wrong. Any errors have been logged.  Use **{_config["Prefix"]} help** to see commands and options");
         }
     }
 }
