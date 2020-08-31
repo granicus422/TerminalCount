@@ -374,7 +374,7 @@ namespace TerminalCount.Modules
                                 {
                                     if (server.GetUser(Context.User.Id) != null)
                                     {
-                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("desc"))}** on {server.Name}");
+                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}");
                                     }
                                 }
                                 else
@@ -405,7 +405,7 @@ namespace TerminalCount.Modules
                                 {
                                     if (server.GetUser(Context.User.Id) != null)
                                     {
-                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("desc"))}** on {server.Name}");
+                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}");
                                     }
                                 }
                                 else
