@@ -223,7 +223,8 @@ namespace TerminalCount.Modules
                         cmd.CommandText += " serverId = @serverId AND";
                         cmd.Parameters.AddWithValue("@serverId", Context.Guild.Id);
                     }
-                    cmd.CommandText += " retireDate IS NULL ORDER BY eventDateTime, id";
+                    cmd.CommandText += " (retireDate IS NULL or retireDate > @retireDate) ORDER BY eventDateTime, id";
+                    cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
                     using (MySqlDataReader dr = cmd.ExecuteReader())
                     {
                         while (dr.Read())
@@ -341,9 +342,11 @@ namespace TerminalCount.Modules
                                 var server = _client.GetGuild(serverId);
                                 embed.Title += $" on {server.Name}";
                             }
-                            if (dr["retireDate"] != DBNull.Value)
+                            if (dr["retireDate"] != DBNull.Value && dr.GetDateTime("retireDate") < DateTime.UtcNow)
                             {
-                                embed.Title += $" (retired on {dr.GetDateTime("retireDate")})";
+                                TimeZoneInfo estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+
+                                embed.Title += $" (retired on {TimeZoneInfo.ConvertTimeFromUtc(dr.GetDateTime("retireDate"), estZone)} TOTTZ)";
                             }
                             if (dr.GetString("url") != "")
                             {
@@ -356,6 +359,68 @@ namespace TerminalCount.Modules
 
                     if (found)
                     {
+                        bool parentsFound = false;
+                        sb.AppendLine("__Parent Events__");
+                        cmd.CommandText = $"SELECT e.`desc` as description,e.serverId as serverId,e.id as id FROM `events` e, eventparents ep WHERE ep.parentId = e.id AND ep.eventId = @eventId AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
+                        cmd.Parameters.AddWithValue("@eventId", eventId);
+                        cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
+                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                parentsFound = true;
+                                var server = _client.GetGuild(Convert.ToUInt64(dr.GetString("serverId")));
+                                if (Context.Guild == null && server != null)
+                                {
+                                    if (server.GetUser(Context.User.Id) != null)
+                                    {
+                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("desc"))}** on {server.Name}");
+                                    }
+                                }
+                                else
+                                {
+                                    sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**");
+                                }
+                            }
+                        }
+                        cmd.Parameters.Clear();
+                        if (!parentsFound)
+                        {
+                            sb.AppendLine("*No parent events defined*");
+                        }
+                        sb.AppendLine();
+
+                        bool childFound = false;
+                        sb.AppendLine("__Child Events__");
+                        cmd.CommandText = $"SELECT e.`desc` as description,e.serverId as serverId,e.id as id FROM `events` e, eventparents ep WHERE ep.eventId = e.id AND ep.parentId = @eventId AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
+                        cmd.Parameters.AddWithValue("@eventId", eventId);
+                        cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
+                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                childFound = true;
+                                var server = _client.GetGuild(Convert.ToUInt64(dr.GetString("serverId")));
+                                if (Context.Guild == null && server != null)
+                                {
+                                    if (server.GetUser(Context.User.Id) != null)
+                                    {
+                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("desc"))}** on {server.Name}");
+                                    }
+                                }
+                                else
+                                {
+                                    sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**");
+                                }
+                            }
+                        }
+                        cmd.Parameters.Clear();
+                        if (!childFound)
+                        {
+                            sb.AppendLine("*No child events defined*");
+                        }
+                        sb.AppendLine();
+
                         bool found2 = false;
                         sb.AppendLine("__Subscribed users:__");
                         var userList = new List<string>();
@@ -495,8 +560,9 @@ namespace TerminalCount.Modules
 
                     foreach (var ev in eventDict)
                     {
-                        cmd.CommandText = $"SELECT `desc` FROM `events` WHERE id = @id AND retireDate IS NULL;";
+                        cmd.CommandText = $"SELECT `desc` FROM `events` WHERE id = @id AND (retireDate IS NULL or retireDate > @retireDate);";
                         cmd.Parameters.AddWithValue("@id", ev.Key);
+                        cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
                         using (MySqlDataReader dr = cmd.ExecuteReader())
                         {
                             while (dr.Read())
@@ -549,7 +615,7 @@ namespace TerminalCount.Modules
 
         [Command("subscribe"), Summary("sub [#/\"all\"]"), Remarks("Subscribe caller to event #")]
         [Alias("sub")]
-        public async Task Subscribe([Remainder] string args="")
+        public async Task Subscribe([Remainder] string args = "")
         {
             try
             {
@@ -632,7 +698,7 @@ namespace TerminalCount.Modules
                             {
                                 sb.AppendLine($"Sorry, event id {id} does not exist...");
                             }
-                            else if (retireDate < DateTime.MaxValue)
+                            else if (retireDate < DateTime.UtcNow)
                             {
                                 sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
                             }
@@ -749,7 +815,7 @@ namespace TerminalCount.Modules
                         {
                             sb.AppendLine($"Sorry, event id {id} does not exist...");
                         }
-                        else if (retireDate < DateTime.MaxValue)
+                        else if (retireDate < DateTime.UtcNow)
                         {
                             sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
                         }
@@ -856,8 +922,9 @@ namespace TerminalCount.Modules
                         var serverDict = new Dictionary<UInt64, string>();
                         foreach (int eventId in eventList)
                         {
-                            cmd.CommandText = $"SELECT `desc`,serverId FROM `events` WHERE id = @id AND retireDate IS NULL;";
+                            cmd.CommandText = $"SELECT `desc`,serverId FROM `events` WHERE id = @id AND (retireDate IS NULL OR retireDate > @retireDate);";
                             cmd.Parameters.AddWithValue("@id", eventId);
+                            cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
                             using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
                                 while (dr.Read())
@@ -970,7 +1037,7 @@ namespace TerminalCount.Modules
                             {
                                 sb.AppendLine($"Sorry, event id {id} does not exist...");
                             }
-                            else if (retireDate < DateTime.MaxValue)
+                            else if (retireDate < DateTime.UtcNow)
                             {
                                 sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
                             }
@@ -1102,11 +1169,11 @@ namespace TerminalCount.Modules
                         //{
                         //    sb.AppendLine($"Sorry, you are not a member of the Discord server this event originated on and may not notify on it.");
                         //}
-                        else if (Context.Guild==null||Context.Guild.Id!= serverId)
+                        else if (Context.Guild == null || Context.Guild.Id != serverId)
                         {
                             sb.AppendLine($"Sorry, notifications must occur from the server they belong to.");
                         }
-                        else if (retireDate < DateTime.MaxValue)
+                        else if (retireDate < DateTime.UtcNow)
                         {
                             sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
                         }
@@ -1114,8 +1181,9 @@ namespace TerminalCount.Modules
                         {
                             var parentList = new List<int>();
                             parentList.Add(0);
-                            cmd.CommandText = $"SELECT parentId FROM `eventparents` WHERE eventId = @id";
+                            cmd.CommandText = $"SELECT parentId FROM `eventparents` WHERE eventId = @id AND (retireDate IS NULL OR retireDate > @retireDate)";
                             cmd.Parameters.AddWithValue("@id", id);
+                            cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
                             using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
                                 while (dr.Read())
@@ -1185,7 +1253,7 @@ namespace TerminalCount.Modules
 
                             cmd.CommandText = "INSERT INTO notifications (eventId,userId,notifyDateTime,message,channelId,messageId) VALUES (@eventId,@userId,@notifyDateTime,@message,@channelId,@messageId);";
                             cmd.Parameters.AddWithValue("@eventId", id);
-                            cmd.Parameters.AddWithValue("@userId", userId);
+                            cmd.Parameters.AddWithValue("@userId", Context.User.Id);
                             cmd.Parameters.AddWithValue("@notifyDateTime", DateTime.UtcNow);
                             cmd.Parameters.AddWithValue("@message", Utils.ConvertStringToHex(msg));
                             cmd.Parameters.AddWithValue("@channelId", channelId);
@@ -1269,61 +1337,73 @@ namespace TerminalCount.Modules
                     embed.WithColor(new Color(255, 140, 0));
                     embed.Title = $"Updating description for event:";
 
-                    if (Context.Guild != null)
+                    if (id == 0)
                     {
-                        if (id == 0)
+                        sb.AppendLine($"Sorry, event id {id} does not exist...");
+                    }
+                    else
+                    {
+                        using MySqlConnection cn = new MySqlConnection(_connStr);
+                        using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            sb.AppendLine($"Sorry, event id {id} does not exist...");
-                        }
-                        else
-                        {
-                            using MySqlConnection cn = new MySqlConnection(_connStr);
-                            using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                            DateTime retireDate = DateTime.MaxValue;
+                            bool found = false;
+                            string serverId = "";
+                            cmd.CommandText = $"SELECT retireDate,serverId FROM `events` WHERE id = @id;";
+                            cmd.Parameters.AddWithValue("@id", id);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
-                                DateTime retireDate = DateTime.MaxValue;
-                                bool found = false;
-                                cmd.CommandText = $"SELECT retireDate FROM `events` WHERE id = @id and serverId=@serverId;";
-                                cmd.Parameters.AddWithValue("@id", id);
-                                cmd.Parameters.AddWithValue("@serverId", Context.Guild.Id);
-                                using (MySqlDataReader dr = cmd.ExecuteReader())
+                                while (dr.Read())
                                 {
-                                    while (dr.Read())
+                                    serverId = dr.GetString("serverId");
+                                    var server = _client.GetGuild(Convert.ToUInt64(serverId));
+                                    if (Context.Guild == null && server != null)
                                     {
-                                        found = true;
+                                        if (server.GetUser(Context.User.Id) != null)
+                                        {
+                                            found = true;
+                                        }
+
+                                    }
+                                    else
+                                    {
+                                        if (Context.Guild.Id == Convert.ToUInt64(serverId))
+                                        {
+                                            found = true;
+                                        }
+                                    }
+                                    if (found)
+                                    {
                                         if (dr["retireDate"] != DBNull.Value)
                                         {
                                             retireDate = dr.GetDateTime("retireDate");
                                         }
                                     }
                                 }
+                            }
+                            cmd.Parameters.Clear();
+
+                            if (!found)
+                            {
+                                sb.AppendLine($"Sorry, event id {id} does not exist...");
+                            }
+                            else if (retireDate < DateTime.UtcNow)
+                            {
+                                sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
+                            }
+                            else
+                            {
+                                string byteString = Utils.ConvertStringToHex(desc);
+                                cmd.CommandText = $"UPDATE `events` SET `desc` = @desc WHERE id = @eventId";
+                                cmd.Parameters.AddWithValue("@eventId", id);
+                                cmd.Parameters.AddWithValue("@desc", byteString);
+                                cmd.ExecuteNonQuery();
                                 cmd.Parameters.Clear();
 
-                                if (!found)
-                                {
-                                    sb.AppendLine($"Sorry, event id {id} does not exist...");
-                                }
-                                else if (retireDate < DateTime.MaxValue)
-                                {
-                                    sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
-                                }
-                                else
-                                {
-                                    string byteString = Utils.ConvertStringToHex(desc);
-                                    cmd.CommandText = $"UPDATE `events` SET `desc` = @desc WHERE id = @eventId";
-                                    cmd.Parameters.AddWithValue("@eventId", id);
-                                    cmd.Parameters.AddWithValue("@desc", byteString);
-                                    cmd.ExecuteNonQuery();
-                                    cmd.Parameters.Clear();
-
-                                    sb.AppendLine($"Event {id}, **{desc}** updated!");
-                                }
+                                sb.AppendLine($"Event {id}, **{desc}** updated!");
                             }
-
                         }
-                    }
-                    else
-                    {
-                        sb.AppendLine("Sorry, events can only be updated from the server they were created on.");
+
                     }
 
                     embed.Description = sb.ToString();
@@ -1368,28 +1448,44 @@ namespace TerminalCount.Modules
                     embed.WithColor(new Color(255, 140, 0));
                     embed.Title = $"Updating URL for event:";
 
-                    if (Context.Guild != null)
+                    if (id == 0)
                     {
-                        if (id == 0)
+                        sb.AppendLine($"Sorry, event id {id} does not exist...");
+                    }
+                    else
+                    {
+                        using MySqlConnection cn = new MySqlConnection(_connStr);
+                        using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            sb.AppendLine($"Sorry, event id {id} does not exist...");
-                        }
-                        else
-                        {
-                            using MySqlConnection cn = new MySqlConnection(_connStr);
-                            using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                            DateTime retireDate = DateTime.MaxValue;
+                            bool found = false;
+                            string desc = "";
+                            string serverId = "";
+                            cmd.CommandText = $"SELECT retireDate,serverId,`desc` FROM `events` WHERE id = @id;";
+                            cmd.Parameters.AddWithValue("@id", id);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
-                                DateTime retireDate = DateTime.MaxValue;
-                                bool found = false;
-                                string desc = "";
-                                cmd.CommandText = $"SELECT `desc`,retireDate FROM `events` WHERE id = @id and serverId=@serverId;";
-                                cmd.Parameters.AddWithValue("@id", id);
-                                cmd.Parameters.AddWithValue("@serverId", Context.Guild.Id);
-                                using (MySqlDataReader dr = cmd.ExecuteReader())
+                                while (dr.Read())
                                 {
-                                    while (dr.Read())
+                                    serverId = dr.GetString("serverId");
+                                    var server = _client.GetGuild(Convert.ToUInt64(serverId));
+                                    if (Context.Guild == null && server != null)
                                     {
-                                        found = true;
+                                        if (server.GetUser(Context.User.Id) != null)
+                                        {
+                                            found = true;
+                                        }
+
+                                    }
+                                    else
+                                    {
+                                        if (Context.Guild.Id == Convert.ToUInt64(serverId))
+                                        {
+                                            found = true;
+                                        }
+                                    }
+                                    if (found)
+                                    {
                                         desc = Utils.ConvertHexToString(dr.GetString("desc"));
                                         if (dr["retireDate"] != DBNull.Value)
                                         {
@@ -1397,33 +1493,29 @@ namespace TerminalCount.Modules
                                         }
                                     }
                                 }
+                            }
+                            cmd.Parameters.Clear();
+
+                            if (!found)
+                            {
+                                sb.AppendLine($"Sorry, event id {id} does not exist...");
+                            }
+                            else if (retireDate < DateTime.UtcNow)
+                            {
+                                sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
+                            }
+                            else
+                            {
+                                cmd.CommandText = $"UPDATE `events` SET url = @url WHERE id = @eventId";
+                                cmd.Parameters.AddWithValue("@eventId", id);
+                                cmd.Parameters.AddWithValue("@url", url);
+                                cmd.ExecuteNonQuery();
                                 cmd.Parameters.Clear();
 
-                                if (!found)
-                                {
-                                    sb.AppendLine($"Sorry, event id {id} does not exist...");
-                                }
-                                else if (retireDate < DateTime.MaxValue)
-                                {
-                                    sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
-                                }
-                                else
-                                {
-                                    cmd.CommandText = $"UPDATE `events` SET url = @url WHERE id = @eventId";
-                                    cmd.Parameters.AddWithValue("@eventId", id);
-                                    cmd.Parameters.AddWithValue("@url", url);
-                                    cmd.ExecuteNonQuery();
-                                    cmd.Parameters.Clear();
-
-                                    sb.AppendLine($"Event {id}, **{desc}** URL updated!");
-                                }
+                                sb.AppendLine($"Event {id}, **{desc}** URL updated!");
                             }
-
                         }
-                    }
-                    else
-                    {
-                        sb.AppendLine("Sorry, events can only be updated from the server they were created on.");
+
                     }
 
                     embed.Description = sb.ToString();
@@ -1458,7 +1550,7 @@ namespace TerminalCount.Modules
             }
 
             [Command("parent"), Summary("update parent [#] [parent #] [\"remove\"]"), Remarks("Adds or removes parent for event #")]
-            public async Task Parent(int id, int parentId, [Remainder] string remove)
+            public async Task Parent(int id, int parentId, [Remainder] string remove = "")
             {
                 try
                 {
@@ -1468,28 +1560,44 @@ namespace TerminalCount.Modules
                     embed.WithColor(new Color(255, 140, 0));
                     embed.Title = $"Updating parent for event:";
 
-                    if (Context.Guild != null)
+                    if (id == 0)
                     {
-                        if (id == 0)
+                        sb.AppendLine($"Sorry, event id {id} does not exist...");
+                    }
+                    else
+                    {
+                        using MySqlConnection cn = new MySqlConnection(_connStr);
+                        using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            sb.AppendLine($"Sorry, event id {id} does not exist...");
-                        }
-                        else
-                        {
-                            using MySqlConnection cn = new MySqlConnection(_connStr);
-                            using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                            DateTime retireDate = DateTime.MaxValue;
+                            bool found = false;
+                            string desc = "";
+                            string serverId = "";
+                            cmd.CommandText = $"SELECT retireDate,serverId,`desc` FROM `events` WHERE id = @id;";
+                            cmd.Parameters.AddWithValue("@id", id);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
-                                DateTime retireDate = DateTime.MaxValue;
-                                bool found = false;
-                                string desc = "";
-                                cmd.CommandText = $"SELECT `desc`,retireDate FROM `events` WHERE id = @id and serverId=@serverId;";
-                                cmd.Parameters.AddWithValue("@id", id);
-                                cmd.Parameters.AddWithValue("@serverId", Context.Guild.Id);
-                                using (MySqlDataReader dr = cmd.ExecuteReader())
+                                while (dr.Read())
                                 {
-                                    while (dr.Read())
+                                    serverId = dr.GetString("serverId");
+                                    var server = _client.GetGuild(Convert.ToUInt64(serverId));
+                                    if (Context.Guild == null && server != null)
                                     {
-                                        found = true;
+                                        if (server.GetUser(Context.User.Id) != null)
+                                        {
+                                            found = true;
+                                        }
+
+                                    }
+                                    else
+                                    {
+                                        if (Context.Guild.Id == Convert.ToUInt64(serverId))
+                                        {
+                                            found = true;
+                                        }
+                                    }
+                                    if (found)
+                                    {
                                         desc = Utils.ConvertHexToString(dr.GetString("desc"));
                                         if (dr["retireDate"] != DBNull.Value)
                                         {
@@ -1497,29 +1605,49 @@ namespace TerminalCount.Modules
                                         }
                                     }
                                 }
-                                cmd.Parameters.Clear();
+                            }
+                            cmd.Parameters.Clear();
 
-                                if (!found)
+                            //check if parent event part of same server
+                            bool parentFound = false;
+                            string parentDesc = "";
+                            cmd.CommandText = $"SELECT `desc`,retireDate FROM `events` WHERE id = @id and serverId=@serverId and (retireDate IS NULL OR retireDate > @retireDate);";
+                            cmd.Parameters.AddWithValue("@id", parentId);
+                            cmd.Parameters.AddWithValue("@serverId", serverId);
+                            cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
+                            {
+                                while (dr.Read())
                                 {
-                                    sb.AppendLine($"Sorry, event id {id} does not exist...");
+                                    parentFound = true;
+                                    parentDesc = Utils.ConvertHexToString(dr.GetString("desc"));
                                 }
-                                else if (retireDate < DateTime.MaxValue)
+                            }
+                            cmd.Parameters.Clear();
+
+                            if (!found)
+                            {
+                                sb.AppendLine($"Sorry, event id {id} does not exist...");
+                            }
+                            else if (retireDate < DateTime.UtcNow)
+                            {
+                                sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
+                            }
+                            else
+                            {
+                                if (remove.ToLower() == "remove")
                                 {
-                                    sb.AppendLine($"Sorry, event {id}, **{desc}** has already been retired.");
+                                    cmd.CommandText = $"DELETE FROM `eventparents` WHERE eventId = @eventId And parentId=@parentId";
+                                    cmd.Parameters.AddWithValue("@eventId", id);
+                                    cmd.Parameters.AddWithValue("@parentId", parentId);
+                                    cmd.ExecuteNonQuery();
+                                    cmd.Parameters.Clear();
+
+                                    sb.AppendLine($"Event {id}, **{desc}** parent removed!");
                                 }
                                 else
                                 {
-                                    if (remove.ToLower() == "remove")
-                                    {
-                                        cmd.CommandText = $"DELETE FROM `eventparents` WHERE eventId = @eventId And parentId=@parentId";
-                                        cmd.Parameters.AddWithValue("@eventId", id);
-                                        cmd.Parameters.AddWithValue("@parentId", parentId);
-                                        cmd.ExecuteNonQuery();
-                                        cmd.Parameters.Clear();
-
-                                        sb.AppendLine($"Event {id}, **{desc}** parent removed!");
-                                    }
-                                    else
+                                    if (parentFound)
                                     {
                                         cmd.CommandText = $"INSERT INTO `eventparents` (eventId,parentId) VALUES (@eventId,@parentId) ON DUPLICATE KEY UPDATE parentId=parentId;";
                                         cmd.Parameters.AddWithValue("@eventId", id);
@@ -1527,16 +1655,16 @@ namespace TerminalCount.Modules
                                         cmd.ExecuteNonQuery();
                                         cmd.Parameters.Clear();
 
-                                        sb.AppendLine($"Event {id}, **{desc}** parent added!");
+                                        sb.AppendLine($"Event {id}, **{desc}** added as child of {parentId}, **{parentDesc}** ");
+                                    }
+                                    else
+                                    {
+                                        sb.AppendLine($"Parent event {parentId}, **{parentDesc}** not found or already retired.");
                                     }
                                 }
                             }
-
                         }
-                    }
-                    else
-                    {
-                        sb.AppendLine("Sorry, events can only be updated from the server they were created on.");
+
                     }
 
                     embed.Description = sb.ToString();

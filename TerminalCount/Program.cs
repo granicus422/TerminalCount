@@ -93,7 +93,6 @@ namespace TerminalCount
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
             .CreateLogger();
             Serilog.Debugging.SelfLog.Enable(Console.Error);
-            serilogLogger.Information("test console log");
             Log.Logger = serilogLogger;
             // this returns a ServiceProvider that is used later to call for those services
             // we can add types we have access to here, hence adding the new using statement:
