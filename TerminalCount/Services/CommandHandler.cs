@@ -49,9 +49,10 @@ namespace TerminalCount.Services
 
         public async Task InitializeAsync()
         {
-            try { 
-            // register modules that are public and inherit ModuleBase<T>.
-            await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
+            try
+            {
+                // register modules that are public and inherit ModuleBase<T>.
+                await _commands.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
             }
             catch (Exception ex)
             {
@@ -62,41 +63,43 @@ namespace TerminalCount.Services
         // this class is where the magic starts, and takes actions upon receiving messages
         public async Task MessageReceivedAsync(SocketMessage rawMessage)
         {
-            try { 
-            // ensures we don't process system/other bot messages
-            if (!(rawMessage is SocketUserMessage message))
+            try
             {
-                return;
-            }
+                // ensures we don't process system/other bot messages
+                if (!(rawMessage is SocketUserMessage message))
+                {
+                    return;
+                }
 
-            if (message.Source != MessageSource.User)
-            {
-                return;
-            }
+                // sets the argument position away from the prefix we set
+                var argPos = 0;
 
-            // sets the argument position away from the prefix we set
-            var argPos = 0;
+                // get prefix from the configuration file
+                string prefix = _config["Prefix"];
 
-            // get prefix from the configuration file
-            string prefix = _config["Prefix"];
+                // determine if the message has a valid prefix, and adjust argPos based on prefix
+                if (!(message.HasMentionPrefix(_client.CurrentUser, ref argPos) || message.HasStringPrefix(prefix, ref argPos)))
+                {
+                    return;
+                }
 
-            // determine if the message has a valid prefix, and adjust argPos based on prefix
-            if (!(message.HasMentionPrefix(_client.CurrentUser, ref argPos) || message.HasStringPrefix(prefix, ref argPos)))
-            {
-                return;
-            }
+                if (message.Source != MessageSource.User)
+                {
+                    var test = "lkjhbkjbhlkj";
+                    //return;
+                }
 
-            var context = new SocketCommandContext(_client, message);
+                var context = new SocketCommandContext(_client, message);
 
-            // execute command if one is found that matches
-            var result = await _commands.ExecuteAsync(context, argPos, _services);
-            if (!result.IsSuccess && result.Error==CommandError.UnknownCommand)
-            {
-                //var cmd = _commands.Commands.First(obj => obj.Module.Name == "PublicModule" && obj.Name == "help");
-                //var parse = new ParseResult();
-                //parse.
-                //await cmd.ExecuteAsync(context, new ParseResult(), _services);
-            }
+                // execute command if one is found that matches
+                var result = await _commands.ExecuteAsync(context, argPos, _services);
+                if (!result.IsSuccess && result.Error == CommandError.UnknownCommand)
+                {
+                    //var cmd = _commands.Commands.First(obj => obj.Module.Name == "PublicModule" && obj.Name == "help");
+                    //var parse = new ParseResult();
+                    //parse.
+                    //await cmd.ExecuteAsync(context, new ParseResult(), _services);
+                }
             }
             catch (Exception ex)
             {
@@ -107,44 +110,45 @@ namespace TerminalCount.Services
 
         public async Task ReactionAddedAsync(Cacheable<IUserMessage, ulong> msg, ISocketMessageChannel channel, SocketReaction react)
         {
-            try { 
-            var em = new Emoji("\u2705");
-            //In secrets.json
+            try
+            {
+                var em = new Emoji("\u2705");
+                //In secrets.json
 #if DEBUG
-            var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
+                var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
 #else
             var botUserId = Convert.ToUInt64(_config["DiscordBotUserId"]);
 #endif
-            if (react.UserId != botUserId)
-            {
-                if (react.Emote.Name == em.Name)
+                if (react.UserId != botUserId)
                 {
-                    using MySqlConnection cn = new MySqlConnection(_connStr);
-                    using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                    if (react.Emote.Name == em.Name)
                     {
-                        int eventId = 0;
-                        cmd.CommandText = "SELECT id FROM `events` WHERE discordId = @discordId AND retireDate IS NULL;";
-                        cmd.Parameters.AddWithValue("@discordId", msg.Id);
-                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        using MySqlConnection cn = new MySqlConnection(_connStr);
+                        using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            while (dr.Read())
+                            int eventId = 0;
+                            cmd.CommandText = "SELECT id FROM `events` WHERE discordId = @discordId AND retireDate IS NULL;";
+                            cmd.Parameters.AddWithValue("@discordId", msg.Id);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
-                                eventId = dr.GetInt32("id");
+                                while (dr.Read())
+                                {
+                                    eventId = dr.GetInt32("id");
+                                }
                             }
-                        }
-                        cmd.Parameters.Clear();
-
-                        if (eventId > 0)
-                        {
-                            cmd.CommandText = $"INSERT INTO subscriptions (eventId,userId) VALUES (@eventId,@userId) ON DUPLICATE KEY UPDATE userId=userId;";
-                            cmd.Parameters.AddWithValue("@eventId", eventId);
-                            cmd.Parameters.AddWithValue("@userId", react.UserId);
-                            cmd.ExecuteNonQuery();
                             cmd.Parameters.Clear();
+
+                            if (eventId > 0)
+                            {
+                                cmd.CommandText = $"INSERT INTO subscriptions (eventId,userId) VALUES (@eventId,@userId) ON DUPLICATE KEY UPDATE userId=userId;";
+                                cmd.Parameters.AddWithValue("@eventId", eventId);
+                                cmd.Parameters.AddWithValue("@userId", react.UserId);
+                                cmd.ExecuteNonQuery();
+                                cmd.Parameters.Clear();
+                            }
                         }
                     }
                 }
-            }
             }
             catch (Exception ex)
             {
@@ -155,44 +159,45 @@ namespace TerminalCount.Services
 
         public async Task ReactionRemovedAsync(Cacheable<IUserMessage, ulong> msg, ISocketMessageChannel channel, SocketReaction react)
         {
-            try { 
-            var em = new Emoji("\u2705");
-            //In secrets.json
+            try
+            {
+                var em = new Emoji("\u2705");
+                //In secrets.json
 #if DEBUG
-            var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
+                var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
 #else
             var botUserId = Convert.ToUInt64(_config["DiscordBotUserId"]);
 #endif
-            if (react.UserId != botUserId)
-            {
-                if (react.Emote.Name == em.Name)
+                if (react.UserId != botUserId)
                 {
-                    using MySqlConnection cn = new MySqlConnection(_connStr);
-                    using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                    if (react.Emote.Name == em.Name)
                     {
-                        int eventId = 0;
-                        cmd.CommandText = "SELECT id FROM `events` WHERE discordId = @discordId AND retireDate IS NULL;";
-                        cmd.Parameters.AddWithValue("@discordId", msg.Id);
-                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        using MySqlConnection cn = new MySqlConnection(_connStr);
+                        using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            while (dr.Read())
+                            int eventId = 0;
+                            cmd.CommandText = "SELECT id FROM `events` WHERE discordId = @discordId AND retireDate IS NULL;";
+                            cmd.Parameters.AddWithValue("@discordId", msg.Id);
+                            using (MySqlDataReader dr = cmd.ExecuteReader())
                             {
-                                eventId = dr.GetInt32("id");
+                                while (dr.Read())
+                                {
+                                    eventId = dr.GetInt32("id");
+                                }
                             }
-                        }
-                        cmd.Parameters.Clear();
-
-                        if (eventId > 0)
-                        {
-                            cmd.CommandText = $"DELETE FROM subscriptions WHERE eventId=@eventId AND userId=@userId";
-                            cmd.Parameters.AddWithValue("@eventId", eventId);
-                            cmd.Parameters.AddWithValue("@userId", react.UserId);
-                            cmd.ExecuteNonQuery();
                             cmd.Parameters.Clear();
+
+                            if (eventId > 0)
+                            {
+                                cmd.CommandText = $"DELETE FROM subscriptions WHERE eventId=@eventId AND userId=@userId";
+                                cmd.Parameters.AddWithValue("@eventId", eventId);
+                                cmd.Parameters.AddWithValue("@userId", react.UserId);
+                                cmd.ExecuteNonQuery();
+                                cmd.Parameters.Clear();
+                            }
                         }
                     }
                 }
-            }
             }
             catch (Exception ex)
             {

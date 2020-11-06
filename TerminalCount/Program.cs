@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TerminalCount.Services;
 using System.Threading;
 using Serilog;
+using Discord.Rest;
 
 namespace TerminalCount
 {
@@ -18,6 +19,7 @@ namespace TerminalCount
         // setup our fields we assign later
         private readonly IConfiguration _config;
         private DiscordSocketClient _client;
+        private DiscordRestClient _restClient;
 
         static void Main(string[] args)
         {
@@ -51,6 +53,8 @@ namespace TerminalCount
                 // you get the services via GetRequiredService<T>
                 var client = services.GetRequiredService<DiscordSocketClient>();
                 _client = client;
+                var restClient = services.GetRequiredService<DiscordRestClient>();
+                _restClient = restClient;
 
                 // setup logging and the ready event
                 client.Log += LogAsync;
@@ -61,8 +65,10 @@ namespace TerminalCount
                 //In secrets.json
 #if DEBUG
                 await client.LoginAsync(TokenType.Bot, _config["TokenDev"]);
+                await restClient.LoginAsync(TokenType.Bot, _config["TokenDev"]);
 #else
                 await client.LoginAsync(TokenType.Bot, _config["Token"]);
+                await restClient.LoginAsync(TokenType.Bot, _config["Token"]);
 #endif
                 await client.StartAsync();
 
@@ -94,6 +100,9 @@ namespace TerminalCount
             .CreateLogger();
             Serilog.Debugging.SelfLog.Enable(Console.Error);
             Log.Logger = serilogLogger;
+            var dscc = new DiscordSocketConfig();
+            dscc.AlwaysDownloadUsers = true;
+            var dc = new DiscordSocketClient(dscc);
             // this returns a ServiceProvider that is used later to call for those services
             // we can add types we have access to here, hence adding the new using statement:
             // using csharpi.Services;
@@ -101,7 +110,8 @@ namespace TerminalCount
             return new ServiceCollection()
                 .AddSingleton(_config)
                 .AddLogging(configure => configure.AddSerilog(logger: serilogLogger))
-                .AddSingleton<DiscordSocketClient>()
+                .AddSingleton<DiscordSocketClient>(dc)
+                .AddSingleton<DiscordRestClient>()
                 .AddSingleton<CommandService>()
                 .AddSingleton<CommandHandler>()
                 .BuildServiceProvider();
