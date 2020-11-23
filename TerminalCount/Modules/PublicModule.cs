@@ -315,6 +315,7 @@ namespace TerminalCount.Modules
             try
             {
                 var sb = new StringBuilder();
+                var sbNew = new StringBuilder();
                 var embed = new EmbedBuilder();
                 ulong serverId = 0;
 
@@ -380,7 +381,8 @@ namespace TerminalCount.Modules
                     if (found)
                     {
                         bool parentsFound = false;
-                        sb.AppendLine("__Parent Events__");
+                        sb = await checkSend("__Parent Events__",sb,embed);
+
                         cmd.CommandText = $"SELECT e.`desc` as description,e.serverId as serverId,e.id as id FROM `events` e, eventparents ep WHERE ep.parentId = e.id AND ep.eventId = @eventId AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
                         cmd.Parameters.AddWithValue("@eventId", eventId);
                         cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
@@ -394,24 +396,24 @@ namespace TerminalCount.Modules
                                 {
                                     if (server.GetUser(Context.User.Id) != null)
                                     {
-                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}");
+                                        sb = await checkSend($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}", sb, embed);
                                     }
                                 }
                                 else
                                 {
-                                    sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**");
+                                    sb = await checkSend($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**", sb, embed);
                                 }
                             }
                         }
                         cmd.Parameters.Clear();
                         if (!parentsFound)
                         {
-                            sb.AppendLine("*No parent events defined*");
+                            sb = await checkSend("*No parent events defined*", sb, embed);
                         }
                         sb.AppendLine();
 
                         bool childFound = false;
-                        sb.AppendLine("__Child Events__");
+                        sb = await checkSend("__Child Events__", sb, embed);
                         cmd.CommandText = $"SELECT e.`desc` as description,e.serverId as serverId,e.id as id FROM `events` e, eventparents ep WHERE ep.eventId = e.id AND ep.parentId = @eventId AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
                         cmd.Parameters.AddWithValue("@eventId", eventId);
                         cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
@@ -425,24 +427,24 @@ namespace TerminalCount.Modules
                                 {
                                     if (server.GetUser(Context.User.Id) != null)
                                     {
-                                        sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}");
+                                        sb = await checkSend($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}** on {server.Name}", sb, embed);
                                     }
                                 }
                                 else
                                 {
-                                    sb.AppendLine($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**");
+                                    sb = await checkSend($"ID {dr.GetInt64("id")}, **{Utils.ConvertHexToString(dr.GetString("description"))}**", sb, embed);
                                 }
                             }
                         }
                         cmd.Parameters.Clear();
                         if (!childFound)
                         {
-                            sb.AppendLine("*No child events defined*");
+                            sb = await checkSend("*No child events defined*", sb, embed);
                         }
                         sb.AppendLine();
 
                         bool found2 = false;
-                        sb.AppendLine("__Subscribed users:__");
+                        sb = await checkSend("__Subscribed users:__", sb, embed);
                         var userList = new List<string>();
                         cmd.CommandText = $"SELECT userId FROM subscriptions WHERE eventId = @eventId";
                         cmd.Parameters.AddWithValue("@eventId", eventId);
@@ -456,7 +458,8 @@ namespace TerminalCount.Modules
                                 {
                                     var user = _client.GetUser(userId);
                                     userList.Add(user.Username);
-                                } catch (Exception ex)
+                                }
+                                catch (Exception ex)
                                 {
                                     try
                                     {
@@ -466,7 +469,7 @@ namespace TerminalCount.Modules
                                     catch (Exception ex2)
                                     {
                                         userList.Add("Unavailable User");
-                                        Log.Logger.Error(ex2,"Cannot list user " + userId);
+                                        Log.Logger.Error(ex2, "Cannot list user " + userId);
                                     }
                                 }
                             }
@@ -477,18 +480,18 @@ namespace TerminalCount.Modules
                             userList.Sort();
                             foreach (var user in userList)
                             {
-                                sb.AppendLine(user);
+                                sb = await checkSend(user, sb, embed);
                             }
                         }
                         else
                         {
-                            sb.AppendLine("*no subscribers yet*");
+                            sb = await checkSend("*no subscribers yet*", sb, embed);
                         }
 
                         sb.AppendLine();
                         bool found3 = false;
-                        sb.AppendLine("__Previous notifications:__");
-                        cmd.CommandText = $"SELECT userId,notifyDateTime,message,channelId,messageId FROM notifications WHERE eventId = @eventId ORDER BY notifyDateTime";
+                        sb = await checkSend("__Last notification:__", sb, embed);
+                        cmd.CommandText = $"SELECT userId,notifyDateTime,message,channelId,messageId FROM notifications WHERE eventId = @eventId ORDER BY notifyDateTime DESC LIMIT 1";
                         cmd.Parameters.AddWithValue("@eventId", eventId);
                         using (MySqlDataReader dr = cmd.ExecuteReader())
                         {
@@ -501,12 +504,13 @@ namespace TerminalCount.Modules
                                 {
                                     var user = _client.GetUser(userId);
                                     userName = user.Username;
-                                } catch (Exception ex)
+                                }
+                                catch (Exception ex)
                                 {
                                     try
                                     {
                                         var user = _restClient.GetUserAsync(userId).Result;
-                                        userName=user.Username;
+                                        userName = user.Username;
                                     }
                                     catch (Exception ex2)
                                     {
@@ -520,14 +524,19 @@ namespace TerminalCount.Modules
                                 string messageId = dr.GetString("messageId");
                                 TimeZoneInfo estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
 
-                                sb.AppendLine($"{TimeZoneInfo.ConvertTimeFromUtc(notifyDateTime, estZone)} TOTTZ, {userName} alerted {message}");
-                                sb.AppendLine($"https://discordapp.com/channels/{serverId}/{channelId}/{messageId}");
+                                sb = await checkSend($"{TimeZoneInfo.ConvertTimeFromUtc(notifyDateTime, estZone)} TOTTZ, {userName} alerted {message}", sb, embed);
+                                sb = await checkSend($"https://discordapp.com/channels/{serverId}/{channelId}/{messageId}", sb, embed);
                             }
                         }
                         cmd.Parameters.Clear();
                         if (!found3)
                         {
-                            sb.AppendLine("*No notifications yet*");
+                            sb = await checkSend("*No notifications yet*", sb, embed);
+                        }
+                        if (sb.Length > 0)
+                        {
+                            embed.Description = sb.ToString();
+                            await SendEmbed(embed);
                         }
                     }
                     else
@@ -542,33 +551,12 @@ namespace TerminalCount.Modules
                             embed.Title = "Sorry!";
                             sb.AppendLine($"I can only show event details in a private DM channel for events you are already subscribed to.");
                         }
+                        embed.Description = sb.ToString();
+                        await SendEmbed(embed);
                     }
                 }
 
-                embed.Description = sb.ToString();
-
-                bool ok = false;
-                var count = 0;
-                Exception savedEx = new Exception();
-                while (!ok && count < 3)
-                {
-                    try
-                    {
-                        await ReplyAsync(null, false, embed.Build());
-                        ok = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        savedEx = ex;
-                        count++;
-                        System.Threading.Thread.Sleep(1000);
-                    }
-                }
-                if (count == 3)
-                {
-                    throw savedEx;
-                }
-            }
+           }
             catch (Exception ex)
             {
                 Log.Error(ex, ex.Message);
@@ -1749,10 +1737,11 @@ namespace TerminalCount.Modules
             try
             {
                 bool ok = false;
-                if (Context.User.IsBot||Context.User.Username.ToLower()=="granicus")
+                if (Context.User.IsBot || Context.User.Username.ToLower() == "granicus")
                 {
                     ok = true;
-                } else
+                }
+                else
                 {
                     var user = await Context.Guild.GetUserAsync(Context.User.Id);
                     if (user.GuildPermissions.ManageMessages)
@@ -1915,7 +1904,8 @@ namespace TerminalCount.Modules
                             await SendTextReply(id.ToString());
                         }
                     }
-                } else
+                }
+                else
                 {
                     await SendTextReply("You do not have sufficient permission to call this command.");
                 }
@@ -1949,63 +1939,63 @@ namespace TerminalCount.Modules
                 if (ok)
                 {
                     var sb = new StringBuilder();
-                int id;
-                bool isNumeric = int.TryParse(eventId, out id);
+                    int id;
+                    bool isNumeric = int.TryParse(eventId, out id);
 
 
-                using MySqlConnection cn = new MySqlConnection(_connStr);
-                using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
-                {
-                    string eventIdStr;
-                    if (isNumeric)
+                    using MySqlConnection cn = new MySqlConnection(_connStr);
+                    using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                     {
-                        eventIdStr = "id = @id";
-                    }
-                    else
-                    {
-                        eventIdStr = "launchSlug = @launchSlug";
-                    }
-
-                    DateTime retireDate = DateTime.MaxValue;
-                    bool found = false;
-                    string desc = "";
-                    cmd.CommandText = $"SELECT id,retireDate,`desc`,serverId FROM `events` WHERE serverId=@serverId AND {eventIdStr};";
-                    cmd.Parameters.AddWithValue("@serverId", serverId);
-                    cmd.Parameters.AddWithValue("@id", id);
-                    cmd.Parameters.AddWithValue("@launchSlug", eventId.ToLower());
-                    using (MySqlDataReader dr = cmd.ExecuteReader())
-                    {
-                        while (dr.Read())
+                        string eventIdStr;
+                        if (isNumeric)
                         {
-                            serverId = dr.GetString("serverId");
-                            var server = _client.GetGuild(Convert.ToUInt64(serverId));
-                            if (Context.Guild == null && server != null)
-                            {
-                                if (server.GetUser(Context.User.Id) != null)
-                                {
-                                    found = true;
-                                }
+                            eventIdStr = "id = @id";
+                        }
+                        else
+                        {
+                            eventIdStr = "launchSlug = @launchSlug";
+                        }
 
-                            }
-                            else
+                        DateTime retireDate = DateTime.MaxValue;
+                        bool found = false;
+                        string desc = "";
+                        cmd.CommandText = $"SELECT id,retireDate,`desc`,serverId FROM `events` WHERE serverId=@serverId AND {eventIdStr};";
+                        cmd.Parameters.AddWithValue("@serverId", serverId);
+                        cmd.Parameters.AddWithValue("@id", id);
+                        cmd.Parameters.AddWithValue("@launchSlug", eventId.ToLower());
+                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
                             {
-                                if (Context.Guild.Id == Convert.ToUInt64(serverId))
+                                serverId = dr.GetString("serverId");
+                                var server = _client.GetGuild(Convert.ToUInt64(serverId));
+                                if (Context.Guild == null && server != null)
                                 {
-                                    found = true;
+                                    if (server.GetUser(Context.User.Id) != null)
+                                    {
+                                        found = true;
+                                    }
+
                                 }
-                            }
-                            if (found)
-                            {
-                                id = dr.GetInt32("id");
-                                desc = dr.GetString("desc");
-                                if (dr["retireDate"] != DBNull.Value)
+                                else
                                 {
-                                    retireDate = dr.GetDateTime("retireDate");
+                                    if (Context.Guild.Id == Convert.ToUInt64(serverId))
+                                    {
+                                        found = true;
+                                    }
+                                }
+                                if (found)
+                                {
+                                    id = dr.GetInt32("id");
+                                    desc = dr.GetString("desc");
+                                    if (dr["retireDate"] != DBNull.Value)
+                                    {
+                                        retireDate = dr.GetDateTime("retireDate");
+                                    }
                                 }
                             }
                         }
-                    }
-                    cmd.Parameters.Clear();
+                        cmd.Parameters.Clear();
 
                         if (userId != "")
                         {
@@ -2015,17 +2005,19 @@ namespace TerminalCount.Modules
                             cmd.Parameters.AddWithValue("@userId", userId);
                             cmd.ExecuteNonQuery();
                             cmd.Parameters.Clear();
-                        } else
+                        }
+                        else
                         {
                             await SendTextReply("Cannot unsubscribe if no user specified");
                         }
 
+                    }
                 }
-            } else
-            {
-                await SendTextReply("You do not have sufficient permission to call this command.");
+                else
+                {
+                    await SendTextReply("You do not have sufficient permission to call this command.");
+                }
             }
-        }
             catch (Exception ex)
             {
                 await SendTextReply(ex.Message);
@@ -2486,6 +2478,43 @@ namespace TerminalCount.Modules
             {
                 throw savedEx;
             }
+        }
+
+        private async Task SendEmbed(EmbedBuilder embed)
+        {
+            bool ok = false;
+            int count = 0;
+            Exception savedEx = new Exception();
+            while (!ok && count < 3)
+            {
+                try
+                {
+                    await ReplyAsync(null, false, embed.Build());
+                    ok = true;
+                }
+                catch (Exception ex)
+                {
+                    savedEx = ex;
+                    count++;
+                    System.Threading.Thread.Sleep(1000);
+                }
+            }
+            if (count == 3)
+            {
+                throw savedEx;
+            }
+        }
+
+        private async Task<StringBuilder> checkSend(string newText, StringBuilder sb, EmbedBuilder embed)
+        {
+            if (sb.Length + newText.Length > 2048)
+            {
+                embed.Description = sb.ToString();
+                await SendEmbed(embed);
+                embed.Title = "";
+                return new StringBuilder();
+            }
+            return sb.AppendLine(newText);
         }
     }
 }
