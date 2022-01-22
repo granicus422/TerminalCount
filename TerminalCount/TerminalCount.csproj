@@ -4,6 +4,11 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UserSecretsId>fa2876b8-4f36-4045-860a-3d89e6b4686d</UserSecretsId>
+    <Configurations>Debug;Release;ServerTest</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ServerTest|AnyCPU'">
+    <DefineConstants>TRACE;ServerTest</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

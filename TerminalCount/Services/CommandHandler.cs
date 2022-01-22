@@ -24,6 +24,7 @@ namespace TerminalCount.Services
         private readonly IServiceProvider _services;
         //private readonly ILogger _logger;
         private readonly string _connStr;
+        private readonly PublicModule _pm;
 
         public CommandHandler(IServiceProvider services)
         {
@@ -34,6 +35,7 @@ namespace TerminalCount.Services
             _client = services.GetRequiredService<DiscordSocketClient>();
             //_logger = services.GetRequiredService<ILogger>();
             _services = services;
+            _pm = new PublicModule(_services);
 
             // take action when we execute a command
             _commands.CommandExecuted += CommandExecutedAsync;
@@ -77,9 +79,25 @@ namespace TerminalCount.Services
                 // get prefix from the configuration file
                 string prefix = _config["Prefix"];
 
+                var context = new SocketCommandContext(_client, message);
+
                 // determine if the message has a valid prefix, and adjust argPos based on prefix
                 if (!(message.HasMentionPrefix(_client.CurrentUser, ref argPos) || message.HasStringPrefix(prefix, ref argPos)))
                 {
+                    //check if a Nostradambot prediction
+                    if (message.Source==MessageSource.Bot && message.Author.Id== 706653503988301834)
+                    {
+                        if (message.Content.Contains("I have logged prediction "))
+                        {
+                            var msgAry = message.Content.Split("```");
+                            var strAry = msgAry[1].Split(" ");
+                            string predNum = strAry[4];
+                            int quote1 = msgAry[1].IndexOf('"');
+                            int quote2 = msgAry[1].LastIndexOf('"');
+                            string prediction = msgAry[1].Substring(quote1 + 1, quote2 - quote1-2);
+                            await _pm.NotifyNDB(prediction,context.Guild.Id, context.Message.Channel.Id, context.Message.Id);
+                        }
+                    }
                     return;
                 }
 
@@ -88,8 +106,6 @@ namespace TerminalCount.Services
                     var test = "lkjhbkjbhlkj";
                     //return;
                 }
-
-                var context = new SocketCommandContext(_client, message);
 
                 // execute command if one is found that matches
                 var result = await _commands.ExecuteAsync(context, argPos, _services);
@@ -114,7 +130,7 @@ namespace TerminalCount.Services
             {
                 var em = new Emoji("\u2705");
                 //In secrets.json
-#if DEBUG
+#if DEBUG || ServerTest
                 var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
 #else
             var botUserId = Convert.ToUInt64(_config["DiscordBotUserId"]);
@@ -163,7 +179,7 @@ namespace TerminalCount.Services
             {
                 var em = new Emoji("\u2705");
                 //In secrets.json
-#if DEBUG
+#if DEBUG || ServerTest
                 var botUserId = Convert.ToUInt64(_config["DiscordBotUserIdDev"]);
 #else
             var botUserId = Convert.ToUInt64(_config["DiscordBotUserId"]);

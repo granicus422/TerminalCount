@@ -22,6 +22,7 @@ using MySqlX.XDevAPI.Relational;
 using System.Globalization;
 using TerminalCount.Services;
 using Discord.Rest;
+using System.Runtime.InteropServices;
 
 namespace TerminalCount.Modules
 {
@@ -365,7 +366,16 @@ namespace TerminalCount.Modules
                             }
                             if (dr["retireDate"] != DBNull.Value && dr.GetDateTime("retireDate") < DateTime.UtcNow)
                             {
-                                TimeZoneInfo estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                                //TimeZoneInfo estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                                TimeZoneInfo estZone = TimeZoneInfo.Utc;
+                                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                                {
+                                    estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                                }
+                                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                                {
+                                    estZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+                                }
 
                                 embed.Title += $" (retired on {TimeZoneInfo.ConvertTimeFromUtc(dr.GetDateTime("retireDate"), estZone)} TOTTZ)";
                             }
@@ -381,7 +391,7 @@ namespace TerminalCount.Modules
                     if (found)
                     {
                         bool parentsFound = false;
-                        sb = await checkSend("__Parent Events__",sb,embed);
+                        sb = await checkSend("__Parent Events__", sb, embed);
 
                         cmd.CommandText = $"SELECT e.`desc` as description,e.serverId as serverId,e.id as id FROM `events` e, eventparents ep WHERE ep.parentId = e.id AND ep.eventId = @eventId AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
                         cmd.Parameters.AddWithValue("@eventId", eventId);
@@ -522,7 +532,15 @@ namespace TerminalCount.Modules
                                 var message = Utils.ConvertHexToString(dr.GetString("message"));
                                 string channelId = dr.GetString("channelId");
                                 string messageId = dr.GetString("messageId");
-                                TimeZoneInfo estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                                TimeZoneInfo estZone = TimeZoneInfo.Utc;
+                                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                                {
+                                    estZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                                }
+                                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                                {
+                                    estZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+                                }
 
                                 sb = await checkSend($"{TimeZoneInfo.ConvertTimeFromUtc(notifyDateTime, estZone)} TOTTZ, {userName} alerted {message}", sb, embed);
                                 sb = await checkSend($"https://discordapp.com/channels/{serverId}/{channelId}/{messageId}", sb, embed);
@@ -556,7 +574,7 @@ namespace TerminalCount.Modules
                     }
                 }
 
-           }
+            }
             catch (Exception ex)
             {
                 Log.Error(ex, ex.Message);
@@ -1099,6 +1117,7 @@ namespace TerminalCount.Modules
         }
 
         [Command("notify"), Summary("notify [#] [optional message]"), Remarks("Notifies all subscribers of event #.  Optional message is appended on end of standard notification.")]
+        [Alias("alert", "-alert", "-notify", "trigger", "-trigger")]
         public async Task Notify(string eventId, [Remainder] string msg = "")
         {
             try
@@ -1315,6 +1334,132 @@ namespace TerminalCount.Modules
             {
                 Log.Error(ex, ex.Message);
                 throw ex;
+            }
+        }
+
+        public async Task NotifyNDB(string prediction, ulong guildId, ulong channelId, ulong messageId)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                var embed = new EmbedBuilder();
+
+                embed.WithColor(new Color(255, 140, 0));
+                embed.Title = $"Event notification:";
+
+                int id;
+                bool isNumeric = int.TryParse("141", out id);
+
+                using MySqlConnection cn = new MySqlConnection(_connStr);
+                using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
+                {
+                    string eventIdStr;
+                    if (isNumeric)
+                    {
+                        eventIdStr = "id = @id";
+                    }
+                    else
+                    {
+                        eventIdStr = "launchSlug = @launchSlug";
+                    }
+
+                    string desc = "";
+                    string serverName = "";
+                    string url = "";
+                    DateTime retireDate = DateTime.MaxValue;
+                    bool found = false;
+                    retireDate = DateTime.MaxValue;
+                    
+                        var parentList = new List<int>();
+                        parentList.Add(0);
+                        cmd.CommandText = $"SELECT ep.parentId as parentId FROM `eventparents` ep JOIN `events` e ON ep.parentId=e.id WHERE ep.eventId = @id AND (e.retireDate IS NULL OR e.retireDate > @retireDate)";
+                        cmd.Parameters.AddWithValue("@id", id);
+                        cmd.Parameters.AddWithValue("@retireDate", DateTime.UtcNow);
+                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                parentList.Add(dr.GetInt32("parentId"));
+                            }
+                        }
+                        cmd.Parameters.Clear();
+
+                        ulong userId = 0;
+                        var eventString = new StringBuilder();
+                        eventString.Append(id);
+                        if (parentList.Count > 0)
+                        {
+                            foreach (var parentId in parentList)
+                            {
+                                eventString.Append($",{parentId}");
+                            }
+                        }
+
+                        cmd.CommandText = $"SELECT DISTINCT userId FROM subscriptions WHERE eventId IN ({eventString.ToString()})";//= @eventId;";
+                                                                                                                                   //cmd.Parameters.AddWithValue("@eventId", id);
+                        using (MySqlDataReader dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                userId = dr.GetUInt64("userId");
+                                IUser u = _client.GetUser(userId);
+                                if (u == null)
+                                {
+                                    u = await _restClient.GetUserAsync(userId);
+                                }
+                                StringBuilder message = new StringBuilder();
+                                message.AppendLine($"New NDB Prediction!");
+                                message.AppendLine();
+                                if (prediction != "")
+                                {
+                                    message.AppendLine(prediction);
+                                }
+                                message.AppendLine();
+                                message.AppendLine("Click here to vote!");
+                                message.AppendLine($"https://discordapp.com/channels/{guildId}/{channelId}/{messageId}");
+
+                                bool ok = false;
+                                var cnt = 0;
+                                Exception svEx = new Exception();
+                                while (!ok && cnt < 3)
+                                {
+                                    try
+                                    {
+                                        await UserExtensions.SendMessageAsync(u, message.ToString());
+                                        ok = true;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        svEx = ex;
+                                        cnt++;
+                                        System.Threading.Thread.Sleep(1000);
+                                    }
+                                }
+                                if (cnt == 3)
+                                {
+                                    //throw svEx;
+                                    Log.Logger.Error("Cannot send message to " + u.Username);
+                                }
+                            }
+                        }
+                        cmd.Parameters.Clear();
+
+                        cmd.CommandText = "INSERT INTO notifications (eventId,userId,notifyDateTime,message,channelId,messageId) VALUES (@eventId,@userId,@notifyDateTime,@message,@channelId,@messageId);";
+                        cmd.Parameters.AddWithValue("@eventId", id);
+                        cmd.Parameters.AddWithValue("@userId", 706653503988301834);
+                        cmd.Parameters.AddWithValue("@notifyDateTime", DateTime.UtcNow);
+                        cmd.Parameters.AddWithValue("@message", Utils.ConvertStringToHex(prediction));
+                        cmd.Parameters.AddWithValue("@channelId", channelId);
+                        cmd.Parameters.AddWithValue("@messageId", messageId);
+                        cmd.ExecuteNonQuery();
+                        cmd.Parameters.Clear();
+
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, ex.Message);
             }
         }
 

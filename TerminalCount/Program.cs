@@ -32,7 +32,7 @@ namespace TerminalCount
             var _builder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
                 .AddJsonFile(path: "appsettings.json")
-#if DEBUG
+#if DEBUG || ServerTest
                 .AddJsonFile(path: "appsettings.Development.json");
             _builder.AddUserSecrets<Program>();
 #else
@@ -63,7 +63,7 @@ namespace TerminalCount
 
                 // this is where we get the Token value from the configuration file, and start the bot
                 //In secrets.json
-#if DEBUG
+#if DEBUG || ServerTest
                 await client.LoginAsync(TokenType.Bot, _config["TokenDev"]);
                 await restClient.LoginAsync(TokenType.Bot, _config["TokenDev"]);
 #else
