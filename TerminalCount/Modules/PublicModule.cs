@@ -108,7 +108,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -146,7 +155,7 @@ namespace TerminalCount.Modules
                         using MySqlConnection cn = new MySqlConnection(_connStr);
                         using (MySqlCommand cmd = Utils.GetDbCmd(cn, CommandType.Text, ""))
                         {
-                            cmd.CommandText = $"INSERT INTO `events` (`desc`,serverId) VALUES (@desc,@serverId)";
+                            cmd.CommandText = $"INSERT INTO `events` (`desc`,serverId,url) VALUES (@desc,@serverId,'')";
                             cmd.Parameters.AddWithValue("@desc", byteString);
                             cmd.Parameters.AddWithValue("@serverId", Context.Guild.Id);
                             cmd.ExecuteNonQuery();
@@ -203,7 +212,15 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message!=null)
+                {
+                    exMsg = ex.Message;
+                } else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -304,7 +321,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -577,7 +603,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -666,7 +701,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -812,7 +856,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -1003,7 +1056,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -1111,7 +1173,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -1332,7 +1403,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -1459,7 +1539,16 @@ namespace TerminalCount.Modules
             }
             catch (Exception ex)
             {
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
             }
         }
 
@@ -1597,7 +1686,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -1715,7 +1813,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -1870,7 +1977,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -2058,7 +2174,16 @@ namespace TerminalCount.Modules
             catch (Exception ex)
             {
                 await SendTextReply(ex.Message);
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -2166,7 +2291,16 @@ namespace TerminalCount.Modules
             catch (Exception ex)
             {
                 await SendTextReply(ex.Message);
-                Log.Error(ex, ex.Message);
+                string exMsg;
+                if (ex.Message != null)
+                {
+                    exMsg = ex.Message;
+                }
+                else
+                {
+                    exMsg = "";
+                }
+                Log.Error(ex, exMsg);
                 throw ex;
             }
         }
@@ -2251,7 +2385,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -2332,7 +2475,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -2409,7 +2561,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -2484,7 +2645,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
@@ -2594,7 +2764,16 @@ namespace TerminalCount.Modules
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, ex.Message);
+                    string exMsg;
+                    if (ex.Message != null)
+                    {
+                        exMsg = ex.Message;
+                    }
+                    else
+                    {
+                        exMsg = "";
+                    }
+                    Log.Error(ex, exMsg);
                     throw ex;
                 }
             }
