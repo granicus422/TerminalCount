@@ -80,12 +80,13 @@ namespace TerminalCount.Services
                 string prefix = _config["Prefix"];
 
                 var context = new SocketCommandContext(_client, message);
-
                 // determine if the message has a valid prefix, and adjust argPos based on prefix
                 if (!(message.HasMentionPrefix(_client.CurrentUser, ref argPos) || message.HasStringPrefix(prefix, ref argPos)))
                 {
                     //check if a Nostradambot prediction
-                    if (message.Source==MessageSource.Bot && message.Author.Id== 706653503988301834)
+                    if (message.Source==MessageSource.Bot && (message.Author.Id== 706653503988301834
+                        ||message.Author.Id== 1084946213947850927))
+
                     {
                         if (message.Content.Contains("I have logged prediction "))
                         {
@@ -96,6 +97,18 @@ namespace TerminalCount.Services
                             int quote2 = msgAry[1].LastIndexOf('"');
                             string prediction = msgAry[1].Substring(quote1 + 1, quote2 - quote1-2);
                             await _pm.NotifyNDB(prediction,context.Guild.Id, context.Message.Channel.Id, context.Message.Id);
+                        }
+                        //format of message will be: "NDB2->TC <channelId> <messageId> <predictionText>"
+                        //example:  "NDB2->TC 1234567890 1234567890 I am a prediction!"
+                        if (message.Content.Contains("NDB2->TC "))
+                        {
+                            var msgAry = message.Content.Split(" ");
+                            ulong channelId = Convert.ToUInt64(msgAry[1]);
+                            ulong messageId = Convert.ToUInt64(msgAry[2]);
+                            int channelIdLen = msgAry[1].Length;
+                            int messageIdLen = msgAry[2].Length;
+                            string prediction = message.Content.Substring(channelIdLen + messageIdLen + 11);
+                            await _pm.NotifyNDB(prediction,context.Guild.Id, channelId, messageId);
                         }
                     }
                     return;
